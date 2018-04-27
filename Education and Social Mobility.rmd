@@ -1,0 +1,170 @@
+---
+title: "Education and Social Mobility"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+The GSS data is comprised of data collected from mostly randomly sampled members of the U.S. population via face-to-face interviews. The data set contains interview data collected between 1972 and 2016. Data collected before 1975 was sampled using block quota sampling. This is where the research group split the U.S. population into blocks, and sampled based on specific quotas on sex, age and employment status. The key point is that this was a form of sampling that did not use random sampling methods (nonprobability sampling). Data collected in 1975 and 1976 used a mix of block quota sampling and random sampling. Data collected after 1976 used full probability random sampling. 
+
+In theory, the GSS data should be generalizable to the U.S. population as random sampling techniques were used, assuming the samples were representative. However the use of nonprobability sampling in the first 3 years mean that the insights from data gathered in these years probably cannot be generalized to the U.S. population. There are also a number of biases that may also limit the generalizability of the data. Prior to 2006, the GSS survey only sampled memebers of the English speaking population, hence insights from data sampled before 2006 can only be generalized to English speaking members of the U.S. population. Qualitative studies also commonly suffer from non-response bias. To correct for this, surveys conducted after 2004 used non-responsive sub-sampling, where initital non-respondents were subsampled after an initial cut-off date. Therefore the generalizability of the data will depend on the year the survey was conducted, as well as the quality of the non-responsive sub-sampling technique in use.
+
+The GSS is a survey, and random assignment is not used in the project. Hence, the GSS data cannot demonstrate causation. Any relationships between variables in the GSS will be correlatory. 
+
+* * *
+
+## Part 2: Research question - Is there a relationship between Education Level and Perceptions of Social Mobility? 
+
+Social mobility is defined as the "movement of individuals, families, or groups through a system of social hierarchy or stratification"[1]. Education is thought to be a significant driver of social mobility, so it would be interesting to examine whether an individual's level of education influences their views on social mobility. 
+
+To answer this question, i'll be looking at *getahead* as the response variable, and *degree* as the explanatory variable. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+```{r}
+gsseduc <- gss %>% filter(year > 1976) %>% select(degree, getahead) %>% na.omit()
+
+# Remove unused level, which is "other" from the getahead variable
+gsseduc <- droplevels(gsseduc)
+```
+
+To begin, I've extracted the variables of interest to a new dataframe. I have omitted 'NA' values as they refer to cases where the question was inapplicable, the respondent didn't know or if the data was simply missing. I have also excluded data prior to 1977, as the sampling methods used prior to 1977 were not fully based on probability sampling (they did not use random sampling methods). Excluding this now will make our lives easier when it comes to performing inference. Finally, I have excluded the "Other" category of the getahead variable, as it is not possible to determine the meaning of this response.
+
+```{r}
+nrow(gsseduc)
+```
+
+There are 30049 rows, which is our total sample size. 
+
+```{r}
+sapply(gsseduc, levels)
+```
+
+
+The degree variable is discrete with 5 levels, and is the highest level of qualification held by the respondent. The getahead variable has 3 levels and is a response to the question: "Some people say that people get ahead by their own hard work; others say that lucky breaks or help from other people are more important. Which do you think is most important?"  
+
+Taking a look at summary statistics for the degree level variable:
+
+```{r fig.width=10,fig.height=5}
+gsseduc  %>% group_by(degree) %>% summarise(total = n()) %>% mutate(proportion = total / sum(total)) 
+ggplot(gsseduc, aes(x = degree)) + geom_bar() +xlab("Degree") + ylab("No of Respondents") + ggtitle("Highest Qualification held by Survey Respondents")
+
+```
+
+The majority of respondents (~53%) completed high school, and approximately 28% of respondents have post high-school level qualifications. Around 20% of respondents did not finish high school with a diploma or GED certificate. 
+
+```{r fig.width=10,fig.height=5}
+gsseduc  %>% group_by(getahead) %>% summarise(total = n()) %>% mutate(proportion = total / sum(total)) 
+ggplot(gsseduc, aes(x = getahead)) + geom_bar() +xlab("Response to Social Mobility Question") + ylab("No of Respondents") + ggtitle("Perceptions of Social Mobility Among Respondents")
+```
+
+Two thirds of surveryed Americans believe that  hard work is the most important determinant of 'getting ahead'. Around 11% believe that luck or help plays the most important role in progressing up the social ladder, while 22% believe both hard work and luck or help are equally important. 
+
+```{r}
+cont_table <- table(gsseduc$degree, gsseduc$getahead)
+cont_table
+```
+
+The contingency table is useful to assess how both variables are distributed. Inspecting the relationship visually:
+
+```{r fig.width=10,fig.height=5}
+ggplot(gsseduc, aes(x = degree, fill = getahead)) + geom_bar(position = "fill") + ylab("Proportion") + xlab("Degree")  + ggtitle("Perceptions of Social Mobility Across Education Levels")
+```
+
+It appears that education level and the respondent's perception of social mobility are unlikely to be independent, as the proportions of respondents views on social mobility differs depending on the education level. In the next section i'll be performing a hypothesis test to check if we can quantitavely demonstrate a relationship between the two variables. 
+
+* * *
+
+## Part 4: Inference
+
+#### Hypotheses
+
+<li> $H_0:$ Education level and perception of social mobility are **independent**. Perceptions of social mobility do not vary by education level. </li> 
+<li> $H_A:$ Education level and perception of social mobility are **dependent**. Perceptions of social mobility do vary by education level. </li> 
+
+#### Statistical Test: Chi-Square Test of Independence
+
+We can check if these variables are dependent by using the Chi-Square Test of Independence. This is the most apporpriate test as we are trying to establish whether there is a dependency between two categorical variables (degree and getahead), each with more than 2 levels. 
+
+To perform this test, we first calculate the value we would expect in each cell of the contingency table if null hypothesis were true. The formula for calculating the expected value of any given cell is:
+
+$$Expected\ Value =\frac{row.total*column.total}{table.total}$$
+
+After calculating the expected values, we then calculate the Chi-Square test statistic, which a measure of the variance between the observed and expected frequencies:
+
+$$\displaystyle \chi ^{2}=\sum{\frac {(O-E)^{2}}{E}}$$
+
+where *O* is the observed value, and *E* is the expected value. After obtaining the chi-square statistic, the P value can be obtained by comparing the test statistic to the critical chi-square value at the given degrees of freedom. The degrees of freedom is given by:
+
+$$df = (r-1)(n-1)$$
+Where *r* is the number of rows and *n* is the number of columns. I will be using the chi-squared test function in R (chisq.test) to perform these calculations. 
+
+#### Conditions
+
+In order to use this test, we must satisfy two conditions:
+
+1. Sampled observations must be independent. This condition is satisfied as the data was collected using random sampling methods and the total sample size (30049) is highly likely to be less than 10% of the total population. We can also assume that each cell represents one scenario.
+
+2. The sample size of an individual cell should be 5 or greater. Looking at the contigency table in the previous section confirms that our example easily satifies this requirement.
+
+The hypothesis test will be at the 5% significance level (hence $\alpha = 0.05$). As we are using the Chi-Square test of independence, there will be no confidence intervals as we are not attempting to estimate a population parameter; we are only tyring to establish whether education level and perceptions of social mobility are dependent or independent. 
+
+#### Hypothesis Test
+
+```{r}
+#Perform a Chi-Squared Independence Test on the data in the contigency table
+chisq <- chisq.test(cont_table)
+#Show observed values
+chisq$observed
+
+```
+
+The observed values are identical to our contigency table from earlier. Let's visually inspect how they differ from what we would expect if both variables were independent:
+
+```{r}
+#Show expected values rounded to the nearest whole number
+round(chisq$expected,0)
+```
+
+There are indeed differences. We can quantify the extent of these differences by checking the results of the test we performed earlier:
+
+```{r}
+chisq
+```
+
+####Conclusions
+
+The P value is less than $2\times10^{-16}$, which is far lower than the alpha value of 0.05. Therefore we can reject the null hypothesis and conclude that based on this dataset, education level and perception of social mobility are dependent. It is likely that we can use this dataset to find further insights about the nature of this relationship. A critical question that emerges from this finding is *how* are education and perceptions of social mobility dependent? Or put differently, what sort of relationship underlines these two variables? These questions should form the basis of further study into education and perceptions of social mobility. 
+
+
+* * *
+
+## Bibliography
+
+1. "Social Mobility". 2017. Encyclopedia Britannica. https://www.britannica.com/topic/social-mobility.
